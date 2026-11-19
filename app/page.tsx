@@ -281,7 +281,9 @@ export default function Home() {
                 <div className="mt-1 text-sm">
                   <span className="text-slate-400">Base Balance: </span>
                   <span className="font-semibold text-amber-400">
-                    {ethBalance ? `${Number(ethBalance.formatted).toFixed(4)} ETH` : '...'}
+                    {ethBalance 
+                      ? `${(Number(ethBalance.value) / 10 ** ethBalance.decimals).toFixed(4)} ${ethBalance.symbol}` 
+                      : '...'}
                   </span>
                 </div>
               </div>
