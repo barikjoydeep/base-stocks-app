@@ -72,16 +72,22 @@ export default function Home() {
       })
   }
 
+  // Fixed: Daily Base activity data from growthepie
   useEffect(() => {
-    fetch('https://api.growthepie.com/v1/metrics/txcount.json')
+    fetch('https://api.growthepie.com/v1/export/txcount.json')
       .then(res => res.json())
       .then(data => {
-        const baseData = data?.find((d: any) => d.chain === 'base')?.data || []
-        const last7 = baseData.slice(-7).map((d: any) => ({
-          date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          txs: d.value
-        }))
-        if (last7.length > 0) setActivityData(last7)
+        const baseData = data.filter((item: any) => item.origin_key === 'base')
+        const last7 = baseData
+          .slice(-7)
+          .map((d: any) => ({
+            date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            txs: d.value
+          }))
+
+        if (last7.length > 0) {
+          setActivityData(last7)
+        }
       })
       .catch(() => {
         setActivityData([
@@ -220,7 +226,7 @@ export default function Home() {
           <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-5">
             <div className="text-sm text-slate-400">Daily Transactions</div>
             <div className="text-2xl font-bold text-cyan-400 mt-1">
-              {activityData.length ? formatNumber(activityData[activityData.length - 1].txs) : '2.72M'}
+              {activityData.length ? formatNumber(activityData[activityData.length - 1].txs) : '—'}
             </div>
           </div>
           <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-5">
@@ -435,12 +441,4 @@ export default function Home() {
               </div>
               <div className="mt-6 flex gap-3">
                 <a href={getAerodromeLink(selectedStock.contract_address, true)} target="_blank" className="flex-1 bg-emerald-600 text-center py-3 rounded-xl font-semibold hover:bg-emerald-500 transition">Buy</a>
-                <a href={getAerodromeLink(selectedStock.contract_address, false)} target="_blank" className="flex-1 bg-rose-600 text-center py-3 rounded-xl font-semibold hover:bg-rose-500 transition">Sell</a>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </main>
-  )
-}
+                <a href={getAerodromeLink(selectedStock.contract_address, false)} target="_blank" className="flex-1 bg-rose-600 text-center py-3 rounded-xl font-semibold hover:bg-rose-500 
