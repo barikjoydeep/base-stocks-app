@@ -27,6 +27,7 @@ export default function Home() {
   const [activityData, setActivityData] = useState<any[]>([])
   const [gainers, setGainers] = useState<any[]>([])
   const [losers, setLosers] = useState<any[]>([])
+  const [mounted, setMounted] = useState(false)
   const itemsPerPage = 8
 
   const { data: ethBalance } = useBalance({
@@ -36,6 +37,7 @@ export default function Home() {
   })
 
   useEffect(() => {
+    setMounted(true)
     const saved = localStorage.getItem('stock-favorites')
     if (saved) setFavorites(JSON.parse(saved))
   }, [])
@@ -63,7 +65,9 @@ export default function Home() {
         return res.json()
       })
       .then((data) => {
-        const list = data.tokens || data || []
+        let list = []
+        if (Array.isArray(data?.tokens)) list = data.tokens
+        else if (Array.isArray(data)) list = data
         setStocks(list)
         setLoading(false)
         showToast('Stocks refreshed')
@@ -74,7 +78,6 @@ export default function Home() {
       })
   }
 
-  // Load Base activity
   useEffect(() => {
     fetch('https://api.growthepie.com/v1/export/txcount.json')
       .then(res => res.json())
@@ -99,7 +102,6 @@ export default function Home() {
       })
   }, [])
 
-  // Load Top Movers
   useEffect(() => {
     fetch('/api/movers')
       .then(res => res.json())
@@ -246,13 +248,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Top Movers Section */}
+        {/* Top Movers */}
         <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Gainers */}
           <div className="bg-slate-900/60 border border-emerald-700/40 rounded-2xl p-5">
-            <h3 className="text-lg font-semibold text-emerald-400 mb-4 flex items-center gap-2">
-              📈 Top Volume Gainers
-            </h3>
+            <h3 className="text-lg font-semibold text-emerald-400 mb-4">📈 Top Volume Gainers</h3>
             <div className="space-y-3">
               {gainers.map((item, i) => (
                 <div key={i} className="flex justify-between items-center bg-slate-800/50 rounded-xl px-4 py-3">
@@ -269,11 +268,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Losers */}
           <div className="bg-slate-900/60 border border-rose-700/40 rounded-2xl p-5">
-            <h3 className="text-lg font-semibold text-rose-400 mb-4 flex items-center gap-2">
-              📉 Top Losers
-            </h3>
+            <h3 className="text-lg font-semibold text-rose-400 mb-4">📉 Top Losers</h3>
             <div className="space-y-3">
               {losers.map((item, i) => (
                 <div key={i} className="flex justify-between items-center bg-slate-800/50 rounded-xl px-4 py-3">
@@ -309,7 +305,7 @@ export default function Home() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <p className="text-xs text-slate-500 mt-3 text-center">Data source: growthepie • Updated daily</p>
+            <p className="text-xs text-slate-500 mt-3 text-center">Data source: growthepie</p>
           </div>
         )}
 
@@ -347,13 +343,19 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col sm:flex-row gap-3">
-              {connectors.map((connector) => (
-                <button key={connector.uid} onClick={() => connect({ connector })} className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl font-semibold transition">
-                  Connect {connector.name}
-                </button>
-              ))}
-            </div>
+            mounted && (
+              <div className="flex flex-col sm:flex-row gap-3">
+                {connectors.map((connector) => (
+                  <button 
+                    key={connector.id || connector.uid} 
+                    onClick={() => connect({ connector })} 
+                    className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl font-semibold transition"
+                  >
+                    Connect {connector.name}
+                  </button>
+                ))}
+              </div>
+            )
           )}
         </div>
 
@@ -364,10 +366,16 @@ export default function Home() {
             <option value="name">Sort by Name</option>
             <option value="price">Sort by Price</option>
           </select>
-          <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className="bg-slate-800 border border-slate-700 px-5 rounded-xl hover:bg-slate-700 transition">{sortOrder === 'asc' ? '↑' : '↓'}</button>
-          <button onClick={() => { setShowOnlyFavorites(!showOnlyFavorites); setPage(1) }} className={`px-5 rounded-xl border transition ${showOnlyFavorites ? 'bg-amber-600 border-amber-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>★ Favorites</button>
+          <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className="bg-slate-800 border border-slate-700 px-5 rounded-xl hover:bg-slate-700 transition">
+            {sortOrder === 'asc' ? '↑' : '↓'}
+          </button>
+          <button onClick={() => { setShowOnlyFavorites(!showOnlyFavorites); setPage(1) }} className={`px-5 rounded-xl border transition ${showOnlyFavorites ? 'bg-amber-600 border-amber-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
+            ★ Favorites
+          </button>
           {isConnected && (
-            <button onClick={() => { setShowPortfolioOnly(!showPortfolioOnly); setPage(1) }} className={`px-5 rounded-xl border transition ${showPortfolioOnly ? 'bg-emerald-600 border-emerald-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>My Portfolio</button>
+            <button onClick={() => { setShowPortfolioOnly(!showPortfolioOnly); setPage(1) }} className={`px-5 rounded-xl border transition ${showPortfolioOnly ? 'bg-emerald-600 border-emerald-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
+              My Portfolio
+            </button>
           )}
         </div>
 
