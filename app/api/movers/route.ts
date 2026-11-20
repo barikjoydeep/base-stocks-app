@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 
 export async function GET() {
-  // Sample data based on typical Base tokenized stocks movers
-  // Later you can replace with real data from TrueHold, DexScreener, or on-chain
   const gainers = [
     { symbol: 'TSLAc', name: 'Tesla Inc.', change: 4.82, volume: '12.4M' },
     { symbol: 'NVDAc', name: 'NVIDIA Corporation', change: 3.15, volume: '28.7M' },
