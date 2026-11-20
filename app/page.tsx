@@ -25,6 +25,8 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
   const [activityData, setActivityData] = useState<any[]>([])
+  const [gainers, setGainers] = useState<any[]>([])
+  const [losers, setLosers] = useState<any[]>([])
   const itemsPerPage = 8
 
   const { data: ethBalance } = useBalance({
@@ -72,22 +74,17 @@ export default function Home() {
       })
   }
 
-  // Fixed: Daily Base activity data from growthepie
+  // Load Base activity
   useEffect(() => {
     fetch('https://api.growthepie.com/v1/export/txcount.json')
       .then(res => res.json())
       .then(data => {
         const baseData = data.filter((item: any) => item.origin_key === 'base')
-        const last7 = baseData
-          .slice(-7)
-          .map((d: any) => ({
-            date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            txs: d.value
-          }))
-
-        if (last7.length > 0) {
-          setActivityData(last7)
-        }
+        const last7 = baseData.slice(-7).map((d: any) => ({
+          date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          txs: d.value
+        }))
+        if (last7.length > 0) setActivityData(last7)
       })
       .catch(() => {
         setActivityData([
@@ -100,6 +97,17 @@ export default function Home() {
           { date: 'Nov 18', txs: 2720000 },
         ])
       })
+  }, [])
+
+  // Load Top Movers
+  useEffect(() => {
+    fetch('/api/movers')
+      .then(res => res.json())
+      .then(data => {
+        setGainers(data.gainers || [])
+        setLosers(data.losers || [])
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -212,7 +220,6 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Memory Match Game Link */}
         <div className="mb-6 text-center">
           <Link href="/game">
             <button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 px-6 py-3 rounded-xl font-semibold transition">
@@ -239,27 +246,70 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Top Movers Section */}
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          {/* Gainers */}
+          <div className="bg-slate-900/60 border border-emerald-700/40 rounded-2xl p-5">
+            <h3 className="text-lg font-semibold text-emerald-400 mb-4 flex items-center gap-2">
+              📈 Top Volume Gainers
+            </h3>
+            <div className="space-y-3">
+              {gainers.map((item, i) => (
+                <div key={i} className="flex justify-between items-center bg-slate-800/50 rounded-xl px-4 py-3">
+                  <div>
+                    <div className="font-bold">{item.symbol}</div>
+                    <div className="text-xs text-slate-400">{item.name}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-emerald-400 font-semibold">+{item.change}%</div>
+                    <div className="text-xs text-slate-500">{item.volume}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Losers */}
+          <div className="bg-slate-900/60 border border-rose-700/40 rounded-2xl p-5">
+            <h3 className="text-lg font-semibold text-rose-400 mb-4 flex items-center gap-2">
+              📉 Top Losers
+            </h3>
+            <div className="space-y-3">
+              {losers.map((item, i) => (
+                <div key={i} className="flex justify-between items-center bg-slate-800/50 rounded-xl px-4 py-3">
+                  <div>
+                    <div className="font-bold">{item.symbol}</div>
+                    <div className="text-xs text-slate-400">{item.name}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-rose-400 font-semibold">{item.change}%</div>
+                    <div className="text-xs text-slate-500">{item.volume}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Activity Graph */}
         {activityData.length > 0 && (
-          <div className="mb-8 p-5 bg-slate-900/60 border border-slate-700 rounded-2xl">
-            <h2 className="text-lg font-semibold mb-4 text-cyan-300">Base Daily Transactions</h2>
-            <div className="h-64">
+          <div className="mb-8 p-6 bg-gradient-to-br from-slate-900/80 to-slate-800/60 border border-slate-700/50 rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-cyan-300">Base Daily Transactions</h2>
+              <span className="text-xs text-slate-400">Last 7 days</span>
+            </div>
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={activityData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="date" stroke="#94a3b8" />
-                  <YAxis 
-                    stroke="#94a3b8" 
-                    tickFormatter={(value) => formatNumber(value)}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1e2937', border: 'none', borderRadius: '8px' }}
-                    formatter={(value: any) => [formatNumber(value), 'Transactions']}
-                  />
-                  <Line type="monotone" dataKey="txs" stroke="#22d3ee" strokeWidth={2.5} dot={{ fill: '#22d3ee', r: 4 }} />
+                <LineChart data={activityData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                  <XAxis dataKey="date" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={(value) => formatNumber(value)} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }} formatter={(value: any) => [formatNumber(value), 'Transactions']} />
+                  <Line type="monotone" dataKey="txs" stroke="#22d3ee" strokeWidth={3} dot={{ fill: '#22d3ee', strokeWidth: 2, r: 5 }} activeDot={{ r: 7 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
+            <p className="text-xs text-slate-500 mt-3 text-center">Data source: growthepie • Updated daily</p>
           </div>
         )}
 
@@ -287,9 +337,7 @@ export default function Home() {
                 <div className="mt-1 text-sm">
                   <span className="text-slate-400">Base Balance: </span>
                   <span className="font-semibold text-amber-400">
-                    {ethBalance 
-                      ? `${(Number(ethBalance.value) / 10 ** ethBalance.decimals).toFixed(4)} ${ethBalance.symbol}` 
-                      : '...'}
+                    {ethBalance ? `${(Number(ethBalance.value) / 10 ** ethBalance.decimals).toFixed(4)} ${ethBalance.symbol}` : '...'}
                   </span>
                 </div>
               </div>
@@ -311,35 +359,21 @@ export default function Home() {
 
         {/* Controls */}
         <div className="mb-6 flex flex-col sm:flex-row gap-3 flex-wrap">
-          <input
-            type="text"
-            placeholder="Search stocks..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="flex-1 min-w-[200px] bg-slate-900/70 border border-slate-700 rounded-xl px-5 py-4 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-          />
+          <input type="text" placeholder="Search stocks..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} className="flex-1 min-w-[200px] bg-slate-900/70 border border-slate-700 rounded-xl px-5 py-4 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="bg-slate-900/70 border border-slate-700 rounded-xl px-4 py-4 text-white">
             <option value="name">Sort by Name</option>
             <option value="price">Sort by Price</option>
           </select>
-          <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className="bg-slate-800 border border-slate-700 px-5 rounded-xl hover:bg-slate-700 transition">
-            {sortOrder === 'asc' ? '↑' : '↓'}
-          </button>
-          <button onClick={() => { setShowOnlyFavorites(!showOnlyFavorites); setPage(1) }} className={`px-5 rounded-xl border transition ${showOnlyFavorites ? 'bg-amber-600 border-amber-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
-            ★ Favorites
-          </button>
+          <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className="bg-slate-800 border border-slate-700 px-5 rounded-xl hover:bg-slate-700 transition">{sortOrder === 'asc' ? '↑' : '↓'}</button>
+          <button onClick={() => { setShowOnlyFavorites(!showOnlyFavorites); setPage(1) }} className={`px-5 rounded-xl border transition ${showOnlyFavorites ? 'bg-amber-600 border-amber-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>★ Favorites</button>
           {isConnected && (
-            <button onClick={() => { setShowPortfolioOnly(!showPortfolioOnly); setPage(1) }} className={`px-5 rounded-xl border transition ${showPortfolioOnly ? 'bg-emerald-600 border-emerald-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
-              My Portfolio
-            </button>
+            <button onClick={() => { setShowPortfolioOnly(!showPortfolioOnly); setPage(1) }} className={`px-5 rounded-xl border transition ${showPortfolioOnly ? 'bg-emerald-600 border-emerald-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>My Portfolio</button>
           )}
         </div>
 
         {loading && (
           <div className="grid gap-4 md:grid-cols-2">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 animate-pulse h-48" />
-            ))}
+            {[1,2,3,4].map(i => <div key={i} className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 animate-pulse h-48" />)}
           </div>
         )}
 
@@ -349,7 +383,6 @@ export default function Home() {
           <div className="text-center py-16 text-slate-400">
             <div className="text-5xl mb-4">📭</div>
             <div className="text-lg">No stocks found</div>
-            <div className="text-sm mt-2">Try changing your search or filters</div>
           </div>
         )}
 
@@ -364,45 +397,27 @@ export default function Home() {
                 const isFav = favorites.includes(stock.symbol)
 
                 return (
-                  <div
-                    key={stock.contract_address || stock.symbol}
-                    onClick={() => setSelectedStock(stock)}
-                    className="bg-slate-900/60 border border-slate-700 rounded-2xl p-5 hover:border-cyan-500/50 hover:bg-slate-800/50 transition cursor-pointer relative"
-                  >
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); toggleFavorite(stock.symbol) }} 
-                      className="absolute top-4 right-4 text-xl hover:scale-110 transition"
-                    >
-                      {isFav ? '★' : '☆'}
-                    </button>
-
+                  <div key={stock.contract_address || stock.symbol} onClick={() => setSelectedStock(stock)} className="bg-slate-900/60 border border-slate-700 rounded-2xl p-5 hover:border-cyan-500/50 hover:bg-slate-800/50 transition cursor-pointer relative">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(stock.symbol) }} className="absolute top-4 right-4 text-xl hover:scale-110 transition">{isFav ? '★' : '☆'}</button>
                     <div className="flex justify-between items-start pr-10">
                       <div>
                         <div className="text-2xl font-bold">{stock.symbol}</div>
                         <div className="text-slate-400 text-sm mt-1 line-clamp-1">{stock.name}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-semibold text-emerald-400">
-                          {stock.nav_price ? `$${Number(stock.nav_price).toFixed(2)}` : '—'}
-                        </div>
+                        <div className="text-xl font-semibold text-emerald-400">{stock.nav_price ? `$${Number(stock.nav_price).toFixed(2)}` : '—'}</div>
                         <div className="text-xs text-slate-500">NAV Price</div>
                       </div>
                     </div>
-
                     {isConnected && (
                       <div className="mt-3 text-sm">
                         <span className="text-slate-400">Your Balance: </span>
                         <span className="font-semibold text-cyan-400">{balance > 0 ? balance.toFixed(4) : '0'}</span>
                       </div>
                     )}
-
                     <div className="mt-4 flex gap-3">
-                      <a href={getAerodromeLink(stock.contract_address, true)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-center py-2.5 rounded-xl font-semibold text-sm transition">
-                        Buy
-                      </a>
-                      <a href={getAerodromeLink(stock.contract_address, false)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-1 bg-rose-600 hover:bg-rose-500 text-center py-2.5 rounded-xl font-semibold text-sm transition">
-                        Sell
-                      </a>
+                      <a href={getAerodromeLink(stock.contract_address, true)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-center py-2.5 rounded-xl font-semibold text-sm transition">Buy</a>
+                      <a href={getAerodromeLink(stock.contract_address, false)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-1 bg-rose-600 hover:bg-rose-500 text-center py-2.5 rounded-xl font-semibold text-sm transition">Sell</a>
                     </div>
                   </div>
                 )
@@ -411,13 +426,9 @@ export default function Home() {
 
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-3 mt-8">
-                <button disabled={page === 1} onClick={() => setPage(page - 1)} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg disabled:opacity-50 transition">
-                  Previous
-                </button>
+                <button disabled={page === 1} onClick={() => setPage(page - 1)} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg disabled:opacity-50 transition">Previous</button>
                 <span className="text-slate-300">Page {page} of {totalPages}</span>
-                <button disabled={page === totalPages} onClick={() => setPage(page + 1)} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg disabled:opacity-50 transition">
-                  Next
-                </button>
+                <button disabled={page === totalPages} onClick={() => setPage(page + 1)} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg disabled:opacity-50 transition">Next</button>
               </div>
             )}
           </>
@@ -441,4 +452,12 @@ export default function Home() {
               </div>
               <div className="mt-6 flex gap-3">
                 <a href={getAerodromeLink(selectedStock.contract_address, true)} target="_blank" className="flex-1 bg-emerald-600 text-center py-3 rounded-xl font-semibold hover:bg-emerald-500 transition">Buy</a>
-                <a href={getAerodromeLink(selectedStock.contract_address, false)} target="_blank" className="flex-1 bg-rose-600 text-center py-3 rounded-xl font-semibold hover:bg-rose-500 
+                <a href={getAerodromeLink(selectedStock.contract_address, false)} target="_blank" className="flex-1 bg-rose-600 text-center py-3 rounded-xl font-semibold hover:bg-rose-500 transition">Sell</a>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}
