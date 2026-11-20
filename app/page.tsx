@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAccount, useConnect, useDisconnect, useReadContracts, useBalance } from 'wagmi'
-import { erc20Abi } from 'viem'
+import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import Link from 'next/link'
 
 export default function Home() {
   const { address, isConnected } = useAccount()
@@ -12,244 +10,143 @@ export default function Home() {
   const { disconnect } = useDisconnect()
 
   const [stocks, setStocks] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState<'name' | 'price'>('name')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [selectedStock, setSelectedStock] = useState<any | null>(null)
-  const [favorites, setFavorites] = useState<string[]>([])
-  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false)
-  const [showPortfolioOnly, setShowPortfolioOnly] = useState(false)
-  const [page, setPage] = useState(1)
-  const [darkMode, setDarkMode] = useState(true)
-  const [toast, setToast] = useState<string | null>(null)
-  const [activityData, setActivityData] = useState<any[]>([])
-  const [gainers, setGainers] = useState<any[]>([])
-  const [losers, setLosers] = useState<any[]>([])
+  const [selected, setSelected] = useState<any | null>(null)
   const [mounted, setMounted] = useState(false)
-  const [swapFrom, setSwapFrom] = useState('USDC')
-  const [swapTo, setSwapTo] = useState('NVDAc')
-  const [swapAmount, setSwapAmount] = useState('100')
-  const itemsPerPage = 8
+  const [activityData, setActivityData] = useState<any[]>([])
 
-  const { data: ethBalance } = useBalance({
-    address,
-    chainId: 8453,
-    query: { enabled: isConnected && !!address },
-  })
+  const { data: ethBalance } = useBalance({ address, chainId: 8453, query: { enabled: isConnected } })
+
+  useEffect(() => setMounted(true), [])
 
   useEffect(() => {
-    setMounted(true)
-    const saved = localStorage.getItem('stock-favorites')
-    if (saved) setFavorites(JSON.parse(saved))
-  }, [])
-
-  const showToast = (msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2500)
-  }
-
-  const toggleFavorite = (symbol: string) => {
-    const updated = favorites.includes(symbol)
-      ? favorites.filter(s => s !== symbol)
-      : [...favorites, symbol]
-    setFavorites(updated)
-    localStorage.setItem('stock-favorites', JSON.stringify(updated))
-    showToast(updated.includes(symbol) ? `${symbol} added to favorites` : `${symbol} removed`)
-  }
-
-  const loadStocks = () => {
-    setLoading(true)
-    setError(null)
     fetch('/api/stocks')
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then((data) => {
-        let list = []
-        if (Array.isArray(data?.tokens)) list = data.tokens
-        else if (Array.isArray(data)) list = data
-        setStocks(list)
-        setLoading(false)
-        showToast('Stocks refreshed')
-      })
-      .catch((err) => {
-        setError(err.message || 'Failed to load stocks')
-        setLoading(false)
-      })
-  }
+      .then(res => res.json())
+      .then(data => setStocks(data.tokens || []))
+  }, [])
 
   useEffect(() => {
     fetch('https://api.growthepie.com/v1/export/txcount.json')
       .then(res => res.json())
       .then(data => {
-        const baseData = data.filter((item: any) => item.origin_key === 'base')
-        const last7 = baseData.slice(-7).map((d: any) => ({
+        const base = data.filter((i: any) => i.origin_key === 'base').slice(-7)
+        setActivityData(base.map((d: any) => ({
           date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           txs: d.value
-        }))
-        if (last7.length > 0) setActivityData(last7)
-      })
-      .catch(() => {
-        setActivityData([
-          { date: 'Nov 12', txs: 3200000 },
-          { date: 'Nov 13', txs: 2980000 },
-          { date: 'Nov 14', txs: 3775000 },
-          { date: 'Nov 15', txs: 3212000 },
-          { date: 'Nov 16', txs: 2627000 },
-          { date: 'Nov 17', txs: 2760000 },
-          { date: 'Nov 18', txs: 2720000 },
-        ])
-      })
-  }, [])
-
-  useEffect(() => {
-    fetch('/api/movers')
-      .then(res => res.json())
-      .then(data => {
-        setGainers(data.gainers || [])
-        setLosers(data.losers || [])
+        })))
       })
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    loadStocks()
-  }, [])
+  const filtered = stocks.filter(s =>
+    s.symbol?.toLowerCase().includes(search.toLowerCase()) ||
+    s.name?.toLowerCase().includes(search.toLowerCase())
+  )
 
-  const balanceContracts = stocks
-    .filter(s => s.contract_address)
-    .slice(0, 50)
-    .map((stock) => ({
-      address: stock.contract_address as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'balanceOf',
-      args: [address as `0x${string}`],
-    }))
-
-  const { data: balances } = useReadContracts({
-    contracts: isConnected && address ? balanceContracts : [],
-    query: { enabled: isConnected && !!address },
-  })
-
-  const portfolioValue = stocks.reduce((total, stock, index) => {
-    const balanceData = balances?.[index]
-    const rawBalance = balanceData?.result as bigint | undefined
-    const balance = rawBalance ? Number(rawBalance) / 1e18 : 0
-    const price = stock.nav_price ? Number(stock.nav_price) : 0
-    return total + balance * price
-  }, 0)
-
-  let filteredStocks = stocks.filter((stock) => {
-    const query = search.toLowerCase()
-    const matchesSearch = stock.symbol?.toLowerCase().includes(query) || stock.name?.toLowerCase().includes(query)
-    const matchesFav = !showOnlyFavorites || favorites.includes(stock.symbol)
-    const globalIndex = stocks.findIndex(s => s.symbol === stock.symbol)
-    const balanceData = balances?.[globalIndex]
-    const rawBalance = balanceData?.result as bigint | undefined
-    const balance = rawBalance ? Number(rawBalance) / 1e18 : 0
-    const matchesPortfolio = !showPortfolioOnly || balance > 0
-    return matchesSearch && matchesFav && matchesPortfolio
-  })
-
-  filteredStocks = [...filteredStocks].sort((a, b) => {
-    let valA: any = sortBy === 'name' ? (a.symbol || '') : (a.nav_price || 0)
-    let valB: any = sortBy === 'name' ? (b.symbol || '') : (b.nav_price || 0)
-    if (sortOrder === 'asc') return valA > valB ? 1 : -1
-    return valA < valB ? 1 : -1
-  })
-
-  const totalPages = Math.ceil(filteredStocks.length / itemsPerPage)
-  const paginatedStocks = filteredStocks.slice((page - 1) * itemsPerPage, page * itemsPerPage)
-
-  const getAerodromeLink = (contract: string, isBuy: boolean) => {
-    const usdc = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-    return isBuy
-      ? `https://aerodrome.finance/swap?from=${usdc}&to=${contract}`
-      : `https://aerodrome.finance/swap?from=${contract}&to=${usdc}`
-  }
-
-  const exportPortfolio = () => {
-    const rows = [['Symbol', 'Name', 'Balance', 'Price', 'Value']]
-    stocks.forEach((stock, index) => {
-      const balanceData = balances?.[index]
-      const rawBalance = balanceData?.result as bigint | undefined
-      const balance = rawBalance ? Number(rawBalance) / 1e18 : 0
-      const price = stock.nav_price ? Number(stock.nav_price) : 0
-      if (balance > 0) {
-        rows.push([stock.symbol, stock.name, balance.toFixed(4), price.toFixed(2), (balance * price).toFixed(2)])
-      }
-    })
-    const csv = rows.map(r => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'base-stocks-portfolio.csv'
-    a.click()
-    showToast('Portfolio exported')
-  }
-
-  const sharePortfolio = () => {
-    const text = `My Base Tokenized Stocks Portfolio: $${portfolioValue.toFixed(2)} 🚀\nBuilt on Base`
-    navigator.clipboard.writeText(text)
-    showToast('Portfolio summary copied!')
-  }
-
-  const formatNumber = (num: number) => {
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M'
-    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K'
-    return num.toString()
-  }
-
-  const estimatedOut = (Number(swapAmount) * 0.98).toFixed(2)
+  const formatPrice = (p: any) => (p == null || isNaN(Number(p)) ? 'N/A' : Number(p).toFixed(2))
+  const getLogo = (s: string) => `https://api.coinbase.com/v1/tokenized-stocks/images/${s}`
 
   return (
-    <main className={`min-h-screen p-6 md:p-10 transition-colors ${darkMode ? 'bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white' : 'bg-gradient-to-br from-blue-100 to-indigo-100 text-slate-900'}`}>
+    <main className="min-h-screen p-6 md:p-10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white">
       <div className="max-w-5xl mx-auto">
-        {toast && (
-          <div className="fixed top-4 right-4 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg z-50">
-            {toast}
+        <div className="mb-8 flex flex-wrap gap-2 justify-center">
+          <a href="/" className="px-4 py-2 rounded-xl bg-cyan-600 text-sm">Trade</a>
+          <a href="/explore" className="px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm">Explore</a>
+          <a href="/swap" className="px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm">Swap</a>
+          <a href="/lend" className="px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm">Lend & Stake</a>
+          <a href="/launch" className="px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm">Launch</a>
+          <a href="/profile" className="px-4 py-2 rounded-xl bg-slate-800/60 border border-slate-700 text-sm">Profile</a>
+        </div>
+
+        <h1 className="text-4xl font-bold text-cyan-300 mb-2">Base Tokenized Stocks</h1>
+        <p className="text-blue-200/70 mb-6">Stocks Maxxing Dashboard</p>
+
+        {activityData.length > 0 && (
+          <div className="mb-8 p-6 bg-slate-900/60 border border-slate-700 rounded-2xl">
+            <h2 className="text-lg font-semibold text-cyan-300 mb-4">Base Daily Transactions</h2>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={activityData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="date" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="txs" stroke="#22d3ee" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
 
-        {/* Top Navigation */}
-        <div className="mb-8 flex flex-wrap gap-2 justify-center">
-          {[
-            { name: 'Trade', href: '/' },
-            { name: 'Explore', href: '/explore' },
-            { name: 'Swap', href: '/swap' },
-            { name: 'Lend & Stake', href: '/lend' },
-            { name: 'Launch', href: '/launch' },
-            { name: 'Profile', href: '/profile' },
-          ].map((item) => (
-            <Link key={item.name} href={item.href}>
-              <button className="px-4 py-2 rounded-xl text-sm font-medium bg-slate-800/60 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500/50 transition">
-                {item.name}
+        <div className="mb-6 p-5 bg-slate-900/80 rounded-2xl border border-slate-700">
+          {isConnected ? (
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <div>
+                <div className="text-sm text-slate-400">Wallet</div>
+                <div className="font-mono text-sm text-emerald-400">{address}</div>
+                <div className="text-sm mt-1">Balance: {ethBalance ? (Number(ethBalance.value) / 1e18).toFixed(4) : '...'} ETH</div>
+              </div>
+              <button onClick={() => disconnect()} className="bg-rose-600 px-5 py-2 rounded-xl">Disconnect</button>
+            </div>
+          ) : (
+            mounted && connectors.map(c => (
+              <button key={c.id} onClick={() => connect({ connector: c })} className="bg-indigo-600 px-6 py-3 rounded-xl mr-2">
+                Connect {c.name}
               </button>
-            </Link>
+            ))
+          )}
+        </div>
+
+        <input
+          type="text"
+          placeholder="Search stocks..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full mb-6 bg-slate-900/70 border border-slate-700 rounded-xl px-5 py-4"
+        />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {filtered.map(stock => (
+            <div
+              key={stock.symbol}
+              onClick={() => setSelected(stock)}
+              className="bg-slate-900/60 border border-slate-700 rounded-2xl p-5 cursor-pointer hover:border-cyan-500/50"
+            >
+              <div className="flex items-center gap-4">
+                <img
+                  src={getLogo(stock.symbol)}
+                  alt={stock.symbol}
+                  className="w-12 h-12 rounded-full bg-slate-800"
+                  onError={e => (e.target as HTMLImageElement).style.display = 'none'}
+                />
+                <div className="flex-1">
+                  <div className="text-xl font-bold">{stock.symbol}</div>
+                  <div className="text-slate-400 text-sm">{stock.name}</div>
+                </div>
+                <div className="text-emerald-400 font-semibold">${formatPrice(stock.nav_price)}</div>
+              </div>
+            </div>
           ))}
         </div>
 
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-300 to-blue-200 bg-clip-text text-transparent">
-              Base Tokenized Stocks
-            </h1>
-            <p className="text-blue-200/70 mt-2">Stocks Maxxing Dashboard</p>
+        {selected && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setSelected(null)}>
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-4 mb-4">
+                <img src={getLogo(selected.symbol)} alt="" className="w-14 h-14 rounded-full bg-slate-800" onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
+                <div>
+                  <h2 className="text-2xl font-bold">{selected.symbol}</h2>
+                  <p className="text-slate-400">{selected.name}</p>
+                </div>
+              </div>
+              <p>Price: ${formatPrice(selected.nav_price)}</p>
+              <div className="mt-4 flex gap-2">
+                <a href={`https://aerodrome.finance/swap?to=${selected.contract_address}`} target="_blank" className="flex-1 bg-emerald-600 text-center py-2 rounded-xl">Buy</a>
+                <button onClick={() => setSelected(null)} className="flex-1 bg-slate-700 py-2 rounded-xl">Close</button>
+              </div>
+            </div>
           </div>
-          <button onClick={() => setDarkMode(!darkMode)} className="bg-slate-800/80 hover:bg-slate-700 border border-slate-600 px-4 py-2 rounded-xl text-sm transition">
-            {darkMode ? '☀️ Light' : '🌙 Dark'}
-          </button>
-        </div>
-
-        {/* Rest of the existing content remains the same */}
-        {/* (Copy everything from your previous version below this point) */}
-
-        {/* Base Stats, Swap Preview, Wallet Analytics, Top Movers, Aerodrome Pools, Safety Score, Graph, Portfolio, Wallet Connect, Controls, Stocks List, Modal — সব আগের মতোই রাখো */}
-
+        )}
       </div>
     </main>
   )
